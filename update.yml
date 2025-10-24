@@ -1,0 +1,61 @@
+name: Update AutoNews CSV
+
+on:
+  schedule:
+    - cron: "5 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate CSV (TradingEconomics guest API)
+        run: |
+          python - <<'PY'
+          import datetime, urllib.request, json
+          CURRENCIES = {"USD","EUR","GBP","JPY"}
+          DAYS_AHEAD = 7
+          def fetch():
+              today = datetime.datetime.utcnow().date()
+              end = today + datetime.timedelta(days=DAYS_AHEAD)
+              url = f"https://api.tradingeconomics.com/calendar?c=guest:guest&format=json&d1={today}&d2={end}"
+              with urllib.request.urlopen(url, timeout=20) as r:
+                  return json.loads(r.read().decode("utf-8"))
+          def norm(t):
+              dt = datetime.datetime.fromisoformat(t.replace("Z",""))
+              return dt.strftime("%Y-%m-%d %H:%M")
+          def map_ccy(country, currency):
+              if currency: return currency.upper()
+              cm = {"United States":"USD","Euro Area":"EUR","Germany":"EUR","France":"EUR","Italy":"EUR","Spain":"EUR",
+                    "United Kingdom":"GBP","Japan":"JPY","Australia":"AUD","New Zealand":"NZD","Switzerland":"CHF","Canada":"CAD"}
+              return cm.get(country, (currency or "")).upper()
+          data = fetch()
+          rows = []
+          for ev in data:
+              imp = int(ev.get("Importance") or ev.get("ImportanceValue") or 0)
+              if imp != 3:
+                  continue
+              ccy = map_ccy(ev.get("Country"), ev.get("Currency"))
+              if ccy not in CURRENCIES:
+                  continue
+              when = ev.get("DateUTC") or ev.get("Date")
+              if not when:
+                  continue
+              rows.append((norm(when),"HIGH",ccy))
+          rows.extend([(ts,imp,"NAS100") for ts,imp,ccy in list(rows) if ccy=="USD"])
+          rows = sorted(set(rows), key=lambda r: (r[0], r[2]))
+          with open("autonews_highimpact.csv","w",encoding="utf-8") as f:
+              for ts,imp,ccy in rows:
+                  f.write(f"{ts};{imp};{ccy}\n")
+          print("Wrote rows:", len(rows))
+          PY
+      - name: Commit CSV
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add autonews_highimpact.csv
+          git commit -m "Auto update high-impact CSV" || echo "No changes"
+          git push
