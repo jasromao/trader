@@ -33,6 +33,15 @@ jobs:
                     "United Kingdom":"GBP","Japan":"JPY","Australia":"AUD","New Zealand":"NZD","Switzerland":"CHF","Canada":"CAD"}
               return cm.get(country, (currency or "")).upper()
           data = fetch()
+          if not data:
+    print("⚠️ API vazia — a gerar exemplo manual")
+    data = [
+        {"DateUTC": "2025-10-25T12:30:00Z", "Importance": 3, "Currency": "USD", "Country": "United States"},
+        {"DateUTC": "2025-10-25T14:00:00Z", "Importance": 3, "Currency": "EUR", "Country": "Euro Area"},
+        {"DateUTC": "2025-10-25T15:30:00Z", "Importance": 3, "Currency": "GBP", "Country": "United Kingdom"},
+        {"DateUTC": "2025-10-25T17:00:00Z", "Importance": 3, "Currency": "JPY", "Country": "Japan"},
+    ]
+
           rows = []
           for ev in data:
               imp = int(ev.get("Importance") or ev.get("ImportanceValue") or 0)
